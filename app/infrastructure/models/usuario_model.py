@@ -1,7 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from app.core.database import Base
 from datetime import datetime
-from app.infrastructure.database import Base
+from app.core.database import Base
 
 
 class Usuario(Base):
