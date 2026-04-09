@@ -1,8 +1,16 @@
 from app.infrastructure.models.pedido_model import Pedido, StatusPedido
 from app.infrastructure.models.item_pedido_model import ItemPedido
 from app.infrastructure.models.estoque_model import Estoque
+from app.infrastructure.models.produto_model import Produto
 
 from app.core.database import SessionLocal
+
+class PaymentService:
+
+    def processar_pagamento(self, valor_total):
+        if valor_total <= 100:
+            return "APROVADO"
+        return "RECUSADO"
 
 
 class PedidoService:
@@ -17,15 +25,20 @@ class PedidoService:
             produto_id = item["produto_id"]
             quantidade = item["quantidade"]
 
+            produto = db.query(Produto).filter(Produto.id == produto_id).first()
+
+            if not produto:
+                raise Exception("PRODUTO_NAO_ENCONTRADO")
+
             estoque = db.query(Estoque).filter(
                 Estoque.produto_id == produto_id,
                 Estoque.unidade_id == unidade_id
             ).first()
 
             if not estoque or estoque.quantidade < quantidade:
-                raise Exception("Estoque insuficiente")
+                raise Exception("ESTOQUE_INSUFICIENTE")
 
-            preco_unitario = 10 
+            preco_unitario = produto.preco
             subtotal = preco_unitario * quantidade
 
             valor_total += subtotal
@@ -61,4 +74,16 @@ class PedidoService:
 
         db.commit()
         db.refresh(pedido)
+
+        payment_service = PaymentService()
+        resultado_pagamento = payment_service.processar_pagamento(pedido.valor_total)
+
+        if resultado_pagamento == "APROVADO":
+            pedido.status = StatusPedido.PAGO
+        else:
+            pedido.status = StatusPedido.CANCELADO
+
+        db.commit()
+        db.refresh(pedido)
+
         return pedido
