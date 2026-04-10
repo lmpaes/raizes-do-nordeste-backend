@@ -1,9 +1,7 @@
 from sqlalchemy import Column, Integer, Float, ForeignKey, DateTime, Enum, String
 from datetime import datetime
 import enum
-
 from app.core.database import Base
-
 
 class StatusPagamento(enum.Enum):
     APROVADO = "aprovado"

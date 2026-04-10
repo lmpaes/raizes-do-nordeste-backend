@@ -12,7 +12,6 @@ class StatusPedido(enum.Enum):
     CANCELADO = "CANCELADO"
     FINALIZADO = "FINALIZADO"
 
-
 class CanalPedido(enum.Enum):
     APP = "APP"
     WEB = "WEB"

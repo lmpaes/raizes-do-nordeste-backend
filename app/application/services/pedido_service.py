@@ -1,9 +1,12 @@
+from fastapi import HTTPException
+
 from app.infrastructure.models.pedido_model import Pedido, StatusPedido
 from app.infrastructure.models.item_pedido_model import ItemPedido
 from app.infrastructure.models.estoque_model import Estoque
 from app.infrastructure.models.produto_model import Produto
 
 from app.core.database import SessionLocal
+
 
 class PaymentService:
 
@@ -28,7 +31,10 @@ class PedidoService:
             produto = db.query(Produto).filter(Produto.id == produto_id).first()
 
             if not produto:
-                raise Exception("PRODUTO_NAO_ENCONTRADO")
+                raise HTTPException(
+                    status_code=404,
+                    detail="PRODUTO_NAO_ENCONTRADO"
+                )
 
             estoque = db.query(Estoque).filter(
                 Estoque.produto_id == produto_id,
@@ -36,7 +42,10 @@ class PedidoService:
             ).first()
 
             if not estoque or estoque.quantidade < quantidade:
-                raise Exception("ESTOQUE_INSUFICIENTE")
+                raise HTTPException(
+                    status_code=400,
+                    detail="ESTOQUE_INSUFICIENTE"
+                )
 
             preco_unitario = produto.preco
             subtotal = preco_unitario * quantidade
