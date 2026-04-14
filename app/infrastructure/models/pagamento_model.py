@@ -3,11 +3,14 @@ from datetime import datetime
 import enum
 from app.core.database import Base
 
+
+# Define os possíveis resultados do processamento de pagamento
 class StatusPagamento(enum.Enum):
     APROVADO = "aprovado"
     RECUSADO = "recusado"
 
 
+# Registra as informações do pagamento associado a um pedido
 class Pagamento(Base):
     __tablename__ = "pagamentos"
 

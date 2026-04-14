@@ -5,6 +5,7 @@ import enum
 from app.core.database import Base
 
 
+# Define os possíveis status de um pedido ao longo do seu ciclo
 class StatusPedido(enum.Enum):
     AGUARDANDO_PAGAMENTO = "AGUARDANDO_PAGAMENTO"
     PAGO = "PAGO"
@@ -12,6 +13,8 @@ class StatusPedido(enum.Enum):
     CANCELADO = "CANCELADO"
     FINALIZADO = "FINALIZADO"
 
+
+# Representa os canais pelos quais o pedido pode ser realizado (APP, WEB, BALCAO, TOTEM)
 class CanalPedido(enum.Enum):
     APP = "APP"
     WEB = "WEB"
@@ -19,6 +22,7 @@ class CanalPedido(enum.Enum):
     TOTEM = "TOTEM"
 
 
+# Modelo principal do sistema, responsável por armazenar os dados do pedido
 class Pedido(Base):
     __tablename__ = "pedidos"
 

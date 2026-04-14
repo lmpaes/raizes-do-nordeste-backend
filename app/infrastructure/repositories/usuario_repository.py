@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from app.infrastructure.models.usuario_model import Usuario
 
 
+# Responsável por realizar operações de acesso aos dados de usuários no banco
 class UsuarioRepository:
 
     @staticmethod

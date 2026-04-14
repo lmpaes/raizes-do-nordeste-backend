@@ -4,6 +4,7 @@ from datetime import datetime
 from app.core.database import Base
 
 
+# Representa os produtos disponíveis para venda, podendo variar por unidade
 class Produto(Base):
     __tablename__ = "produtos"
 

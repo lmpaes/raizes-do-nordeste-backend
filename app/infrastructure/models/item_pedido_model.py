@@ -3,6 +3,7 @@ from sqlalchemy import Column, Integer, Float, ForeignKey
 from app.core.database import Base
 
 
+# Representa os itens que compõem um pedido, incluindo quantidade e valores calculados
 class ItemPedido(Base):
     __tablename__ = "itens_pedido"
 

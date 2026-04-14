@@ -1,3 +1,4 @@
+# Arquivo principal da aplicação, responsável por inicializar a API e registrar as rotas
 from fastapi import FastAPI
 
 from app.api.routes.usuario_routes import router as usuario_router
@@ -18,8 +19,10 @@ from app.infrastructure.models.fidelidade_model import Fidelidade
 
 app = FastAPI(title="Raízes do Nordeste API")
 
+# Cria as tabelas no banco de dados com base nos modelos definidos
 Base.metadata.create_all(bind=engine)
 
+# Registra as rotas da aplicação
 app.include_router(usuario_router)
 app.include_router(auth_router)
 app.include_router(pedido_routes.router)
@@ -27,4 +30,5 @@ app.include_router(pedido_routes.router)
 
 @app.get("/")
 def root():
+    # Endpoint simples para verificar se a API está ativa
     return {"message": "API funcionando corretamente"}

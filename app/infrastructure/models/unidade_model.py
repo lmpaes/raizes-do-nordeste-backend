@@ -4,6 +4,7 @@ from datetime import datetime
 from app.core.database import Base
 
 
+# Representa as unidades da rede, utilizadas para controle de pedidos, estoque e produtos
 class Unidade(Base):
     __tablename__ = "unidades"
 

@@ -3,6 +3,7 @@ from datetime import datetime
 from app.core.database import Base
 
 
+# Representa os usuários do sistema, incluindo dados de acesso e consentimento de uso de dados
 class Usuario(Base):
     __tablename__ = "usuarios"
 

@@ -4,6 +4,7 @@ from datetime import datetime
 from app.core.database import Base
 
 
+# Representa o programa de fidelidade, armazenando os pontos acumulados por cada usuário
 class Fidelidade(Base):
     __tablename__ = "fidelidades"
 

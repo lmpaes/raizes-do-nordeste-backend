@@ -4,6 +4,7 @@ from datetime import datetime
 from app.core.database import Base
 
 
+# Controla o estoque de produtos por unidade, utilizado para validar disponibilidade no pedido
 class Estoque(Base):
     __tablename__ = "estoques"
 
