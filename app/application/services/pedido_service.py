@@ -1,10 +1,11 @@
-# Camada de serviço responsável pelas regras de negócio relacionadas ao pedido
+# Camada de serviço responsável pelas regras de negócio do pedido
 from fastapi import HTTPException
 
 from app.infrastructure.models.pedido_model import Pedido, StatusPedido
 from app.infrastructure.models.item_pedido_model import ItemPedido
 from app.infrastructure.models.estoque_model import Estoque
 from app.infrastructure.models.produto_model import Produto
+from app.infrastructure.models.usuario_model import Usuario
 
 from app.core.database import SessionLocal
 
@@ -13,7 +14,7 @@ from app.core.database import SessionLocal
 class PaymentService:
 
     def processar_pagamento(self, valor_total):
-        # Regra simples para simular aprovação ou recusa do pagamento
+        # Regra simples para simular aprovação ou recusa
         if valor_total <= 100:
             return "APROVADO"
         return "RECUSADO"
@@ -22,21 +23,21 @@ class PaymentService:
 class PedidoService:
 
     def criar_pedido(self, usuario_id, unidade_id, canal_pedido, itens):
-        # Abre conexão com o banco de dados
+        # Abre conexão com o banco
         db = SessionLocal()
 
         valor_total = 0
         itens_pedido = []
 
-        # Percorre os itens enviados no pedido
+        # Percorre os itens do pedido
         for item in itens:
             produto_id = item["produto_id"]
             quantidade = item["quantidade"]
 
-            # Busca o produto no banco
+            # Busca o produto
             produto = db.query(Produto).filter(Produto.id == produto_id).first()
 
-            # Valida se o produto existe
+            # Valida existência do produto
             if not produto:
                 raise HTTPException(
                     status_code=404,
@@ -49,20 +50,20 @@ class PedidoService:
                 Estoque.unidade_id == unidade_id
             ).first()
 
-            # Garante que há quantidade suficiente para o pedido
+            # Valida se há estoque suficiente
             if not estoque or estoque.quantidade < quantidade:
                 raise HTTPException(
                     status_code=400,
                     detail="ESTOQUE_INSUFICIENTE"
                 )
 
-            # Calcula o valor do item
+            # Calcula valores do item
             preco_unitario = produto.preco
             subtotal = preco_unitario * quantidade
 
             valor_total += subtotal
 
-            # Armazena os dados do item para persistência posterior
+            # Armazena os itens para salvar depois
             itens_pedido.append({
                 "produto_id": produto_id,
                 "quantidade": quantidade,
@@ -70,11 +71,11 @@ class PedidoService:
                 "subtotal": subtotal
             })
 
-        # Cria o pedido com status inicial aguardando pagamento
+        # Cria o pedido com status inicial
         pedido = Pedido(
             usuario_id=usuario_id,
             unidade_id=unidade_id,
-            canal_pedido=canal_pedido,  # Identifica de onde o pedido foi realizado (APP, TOTEM, etc.)
+            canal_pedido=canal_pedido,  # origem do pedido (APP, TOTEM, etc.)
             status=StatusPedido.AGUARDANDO_PAGAMENTO,
             valor_total=valor_total
         )
@@ -97,13 +98,18 @@ class PedidoService:
         db.commit()
         db.refresh(pedido)
 
-        # Simula a chamada para um serviço externo de pagamento
+        # Simula integração com serviço externo de pagamento
         payment_service = PaymentService()
         resultado_pagamento = payment_service.processar_pagamento(pedido.valor_total)
 
-        # Atualiza o status do pedido conforme resultado do pagamento
+        # Atualiza status conforme resultado do pagamento
         if resultado_pagamento == "APROVADO":
             pedido.status = StatusPedido.PAGO
+
+            # Regra simples de fidelidade
+            usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+            if usuario:
+                usuario.pontos += int(pedido.valor_total)
         else:
             pedido.status = StatusPedido.CANCELADO
 

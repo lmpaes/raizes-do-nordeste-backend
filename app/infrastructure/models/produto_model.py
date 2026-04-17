@@ -4,7 +4,7 @@ from datetime import datetime
 from app.core.database import Base
 
 
-# Representa os produtos disponíveis para venda, podendo variar por unidade
+# Representa um produto disponível para venda em uma unidade
 class Produto(Base):
     __tablename__ = "produtos"
 
@@ -12,9 +12,6 @@ class Produto(Base):
     nome = Column(String, nullable=False)
     descricao = Column(String)
     preco = Column(Float, nullable=False)
-
     ativo = Column(Boolean, default=True)
-
     unidade_id = Column(Integer, ForeignKey("unidades.id"))
-
     data_criacao = Column(DateTime, default=datetime.utcnow)

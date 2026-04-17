@@ -6,6 +6,7 @@ import hashlib
 from app.core.database import SessionLocal
 from app.infrastructure.repositories.usuario_repository import UsuarioRepository
 from app.core.security import criar_token
+from app.api.schemas.auth_schema import LoginRequest  # schema do corpo da requisição
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -20,23 +21,34 @@ def get_db():
 
 
 @router.post("/login")
-def login(email: str, senha: str, db: Session = Depends(get_db)):
+def login(data: LoginRequest, db: Session = Depends(get_db)):
 
-    # Busca o usuário no banco a partir do e-mail informado
+    # Dados recebidos no body (email e senha)
+    email = data.email
+    senha = data.senha
+
+    # Busca o usuário pelo e-mail
     usuario = UsuarioRepository.buscar_por_email(db, email)
 
-    # Caso o usuário não exista, retorna erro de autenticação
+    # Se não encontrar o usuário, retorna erro de autenticação
     if not usuario:
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
-    # Gera o hash da senha informada para comparação
+    # Gera o hash da senha informada para validar
     senha_hash = hashlib.sha256(senha.encode()).hexdigest()
 
-    # Verifica se a senha está correta
+    # Compara a senha informada com a armazenada
     if usuario.senha_hash != senha_hash:
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
-    # Cria o token de acesso com dados do usuário
-    token = criar_token({"sub": usuario.email, "perfil": usuario.perfil})
+    # Gera o token JWT com dados básicos do usuário
+    token = criar_token({
+        "sub": usuario.email,
+        "perfil": usuario.perfil
+    })
 
-    return {"access_token": token, "token_type": "bearer"}
+    # Retorna o token para uso nas próximas requisições
+    return {
+        "access_token": token,
+        "token_type": "bearer"
+    }

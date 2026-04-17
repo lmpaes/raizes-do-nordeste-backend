@@ -1,4 +1,4 @@
-# Define os schemas de entrada e saída relacionados ao usuário
+# Schemas de entrada e saída relacionados ao usuário
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 
@@ -9,7 +9,7 @@ class UsuarioCreate(BaseModel):
     email: EmailStr
     senha: str
     perfil: str
-    consentimento_lgpd: bool  # Indica se o usuário autorizou o uso dos seus dados
+    consentimento_lgpd: bool  # Indica se o usuário autorizou o uso dos dados
 
 
 # Dados retornados pela API após operações com usuário
@@ -22,5 +22,5 @@ class UsuarioResponse(BaseModel):
     data_criacao: datetime
 
     class Config:
-        # Permite converter automaticamente objetos do banco para resposta da API
+        # Permite converter objetos do banco para resposta da API
         from_attributes = True

@@ -14,3 +14,4 @@ class Usuario(Base):
     perfil = Column(String, nullable=False)
     consentimento_lgpd = Column(Boolean, nullable=False)
     data_criacao = Column(DateTime, default=datetime.utcnow)
+    pontos = Column(Integer, default=0)
