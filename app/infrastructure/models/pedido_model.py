@@ -20,6 +20,7 @@ class CanalPedido(enum.Enum):
     WEB = "WEB"
     BALCAO = "BALCAO"
     TOTEM = "TOTEM"
+    PICKUP = "PICKUP"
 
 
 # Modelo principal do sistema, responsável por armazenar os dados do pedido

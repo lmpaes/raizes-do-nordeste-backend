@@ -1,48 +1,36 @@
-# Rotas responsáveis pelo fluxo de pedidos
+# Rotas de pedido responsáveis por receber a requisição autenticada do cliente
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
-from typing import List
+from sqlalchemy.orm import Session
 
 from app.application.services.pedido_service import PedidoService
-from app.core.security import get_current_user
+from app.core.security import require_roles
+from app.core.database import get_db
+from app.api.schemas.pedido_schema import PedidoCreate
+from app.infrastructure.models.usuario_model import Usuario
 
 router = APIRouter(prefix="/pedidos", tags=["Pedidos"])
 
 
-# Representa cada item enviado no pedido
-class ItemPedidoRequest(BaseModel):
-    produto_id: int
-    quantidade: int
-
-
-# Dados necessários para criar um pedido
-class PedidoRequest(BaseModel):
-    usuario_id: int
-    unidade_id: int
-    canal_pedido: str
-    itens: List[ItemPedidoRequest]
-
-
 @router.post("/")
 def criar_pedido(
-    request: PedidoRequest,
-    current_user = Depends(get_current_user)
+    request: PedidoCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles("CLIENTE", "ADMIN"))
 ):
-    # Serviço responsável pelas regras de negócio do pedido
+    # Instancia o serviço que concentra o fluxo de criação do pedido
     service = PedidoService()
 
-    # Envia os dados para o service (validações e processamento)
+    # Cria o pedido usando o usuário autenticado obtido pelo token
     pedido = service.criar_pedido(
-        usuario_id=request.usuario_id,
-        unidade_id=request.unidade_id,
-        canal_pedido=request.canal_pedido,
-        itens=[item.dict() for item in request.itens]
+        db=db,
+        dados_pedido=request,
+        usuario_id=current_user.id
     )
 
-    # Retorna os principais dados do pedido criado
+    # Retorna os dados principais do pedido para o cliente
     return {
         "id": pedido.id,
-        "status": pedido.status.value,
-        "valor_total": pedido.valor_total,
-        "pontos_gerados": int(pedido.valor_total) if pedido.status.value == "PAGO" else 0
+        "status": pedido.status,
+        "total": pedido.valor_total,
+        "pontos_gerados": getattr(pedido, "pontos_gerados", 0)
     }

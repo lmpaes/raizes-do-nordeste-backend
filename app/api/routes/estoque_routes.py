@@ -1,3 +1,4 @@
+# Rotas de estoque responsáveis por cadastrar ou somar produtos em estoque
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -39,13 +40,24 @@ def criar_estoque(data: EstoqueCreate, db: Session = Depends(get_db)):
             detail="PRODUTO_NAO_PERTENCE_A_UNIDADE"
         )
 
-    # Cria o registro de estoque
-    estoque = Estoque(
-        produto_id=data.produto_id,
-        unidade_id=data.unidade_id,
-        quantidade=data.quantidade
-    )
+    # Verifica se já existe estoque cadastrado para o produto na unidade
+    estoque = db.query(Estoque).filter(
+        Estoque.produto_id == data.produto_id,
+        Estoque.unidade_id == data.unidade_id
+    ).first()
 
+    # Soma a quantidade ao estoque atual quando já existir registro
+    if estoque:
+        estoque.quantidade += data.quantidade
+    else:
+        # Cria um novo registro quando for a primeira entrada no estoque
+        estoque = Estoque(
+            produto_id=data.produto_id,
+            unidade_id=data.unidade_id,
+            quantidade=data.quantidade
+        )
+
+    # Salva o estoque atualizado no banco
     db.add(estoque)
     db.commit()
     db.refresh(estoque)

@@ -1,19 +1,28 @@
-# Configuração da conexão com o banco e inicialização do ORM
+# Configuração central de conexão e sessão com o banco de dados
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-# URL de conexão com o banco de dados
+# Define a URL utilizada para conexão com o banco
 DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/raizes_db"
 
 # Cria o engine responsável pela comunicação com o banco
 engine = create_engine(DATABASE_URL, echo=True)
 
-# Configuração da sessão utilizada nas operações com o banco
+# Configura a sessão utilizada nas operações com o banco
 SessionLocal = sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine
 )
 
-# Classe base para os modelos do SQLAlchemy
+# Define a classe base usada pelos modelos do SQLAlchemy
 Base = declarative_base()
+
+
+# Abre e fecha a sessão do banco a cada requisição
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

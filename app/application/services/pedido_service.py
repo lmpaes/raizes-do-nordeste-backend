@@ -1,119 +1,162 @@
-# Camada de serviço responsável pelas regras de negócio do pedido
-from fastapi import HTTPException
+# Camada de serviço responsável por orquestrar criação de pedidos
+from datetime import datetime
 
-from app.infrastructure.models.pedido_model import Pedido, StatusPedido
-from app.infrastructure.models.item_pedido_model import ItemPedido
-from app.infrastructure.models.estoque_model import Estoque
-from app.infrastructure.models.produto_model import Produto
+from sqlalchemy.orm import Session
+
+from app.domain.entities.pedido import Pedido as PedidoDomain, StatusPedido as PedidoStatusDomain
+
+from app.infrastructure.models.pedido_model import (
+    Pedido as PedidoModel,
+    StatusPedido as PedidoStatusModel,
+    CanalPedido as PedidoCanalModel,
+)
+from app.infrastructure.models.item_pedido_model import ItemPedido as PedidoItemModel
+from app.infrastructure.models.fidelidade_model import Fidelidade
 from app.infrastructure.models.usuario_model import Usuario
 
-from app.core.database import SessionLocal
+from app.infrastructure.repositories.produto_repository import ProdutoRepository
+from app.infrastructure.repositories.estoque_repository import EstoqueRepository
 
+from app.domain.exceptions import (
+    ProdutoNaoEncontrado,
+    EstoqueInsuficiente,
+    DomainException
+)
 
-# Simula um serviço externo de pagamento (mock)
-class PaymentService:
-
-    def processar_pagamento(self, valor_total):
-        # Regra simples para simular aprovação ou recusa
-        if valor_total <= 100:
-            return "APROVADO"
-        return "RECUSADO"
+from app.core.logger import logger
 
 
 class PedidoService:
 
-    def criar_pedido(self, usuario_id, unidade_id, canal_pedido, itens):
-        # Abre conexão com o banco
-        db = SessionLocal()
+    def __init__(self):
+        self.produto_repo = ProdutoRepository()
+        self.estoque_repo = EstoqueRepository()
 
-        valor_total = 0
-        itens_pedido = []
-
-        # Percorre os itens do pedido
-        for item in itens:
-            produto_id = item["produto_id"]
-            quantidade = item["quantidade"]
-
-            # Busca o produto
-            produto = db.query(Produto).filter(Produto.id == produto_id).first()
-
-            # Valida existência do produto
-            if not produto:
-                raise HTTPException(
-                    status_code=404,
-                    detail="PRODUTO_NAO_ENCONTRADO"
-                )
-
-            # Verifica o estoque da unidade
-            estoque = db.query(Estoque).filter(
-                Estoque.produto_id == produto_id,
-                Estoque.unidade_id == unidade_id
-            ).first()
-
-            # Valida se há estoque suficiente
-            if not estoque or estoque.quantidade < quantidade:
-                raise HTTPException(
-                    status_code=400,
-                    detail="ESTOQUE_INSUFICIENTE"
-                )
-
-            # Calcula valores do item
-            preco_unitario = produto.preco
-            subtotal = preco_unitario * quantidade
-
-            valor_total += subtotal
-
-            # Armazena os itens para salvar depois
-            itens_pedido.append({
-                "produto_id": produto_id,
-                "quantidade": quantidade,
-                "preco_unitario": preco_unitario,
-                "subtotal": subtotal
-            })
-
-        # Cria o pedido com status inicial
-        pedido = Pedido(
-            usuario_id=usuario_id,
-            unidade_id=unidade_id,
-            canal_pedido=canal_pedido,  # origem do pedido (APP, TOTEM, etc.)
-            status=StatusPedido.AGUARDANDO_PAGAMENTO,
-            valor_total=valor_total
-        )
-
-        db.add(pedido)
-        db.commit()
-        db.refresh(pedido)
-
-        # Salva os itens do pedido
-        for item in itens_pedido:
-            item_pedido = ItemPedido(
-                pedido_id=pedido.id,
-                produto_id=item["produto_id"],
-                quantidade=item["quantidade"],
-                preco_unitario=item["preco_unitario"],
-                subtotal=item["subtotal"]
+    def criar_pedido(self, db: Session, dados_pedido, usuario_id: int):
+        try:
+            logger.info(
+                f"Inicio criacao pedido - usuario={usuario_id} "
+                f"unidade={dados_pedido.unidade_id} canal={dados_pedido.canal_pedido}"
             )
-            db.add(item_pedido)
 
-        db.commit()
-        db.refresh(pedido)
+            # Prepara os itens validados e o mapa de estoque por produto
+            itens_processados = []
+            estoques_map = {}
 
-        # Simula integração com serviço externo de pagamento
-        payment_service = PaymentService()
-        resultado_pagamento = payment_service.processar_pagamento(pedido.valor_total)
+            for item in dados_pedido.itens:
+                # Busca o produto solicitado no pedido
+                produto = self.produto_repo.get_by_id(db, item.produto_id)
 
-        # Atualiza status conforme resultado do pagamento
-        if resultado_pagamento == "APROVADO":
-            pedido.status = StatusPedido.PAGO
+                if not produto:
+                    raise ProdutoNaoEncontrado()
 
-            # Regra simples de fidelidade
-            usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
-            if usuario:
-                usuario.pontos += int(pedido.valor_total)
-        else:
-            pedido.status = StatusPedido.CANCELADO
+                # Recupera todos os registros de estoque do produto na unidade
+                estoques = self.estoque_repo.get_by_produto_and_unidade(
+                    db,
+                    produto.id,
+                    dados_pedido.unidade_id
+                )
 
-        db.commit()
-        db.refresh(pedido)
+                if not estoques:
+                    raise ProdutoNaoEncontrado()
 
-        return pedido
+                # Soma a quantidade disponível para validar se o pedido pode ser criado
+                quantidade_disponivel = self.estoque_repo.get_quantidade_total(estoques)
+
+                if quantidade_disponivel < item.quantidade:
+                    raise EstoqueInsuficiente()
+
+                estoques_map[produto.id] = estoques
+
+                itens_processados.append({
+                    "produto_id": produto.id,
+                    "quantidade": item.quantidade,
+                    "preco_unitario": produto.preco,
+                    "subtotal": item.quantidade * produto.preco,
+                })
+
+            # Cria a entidade de domínio que concentra as regras do pedido
+            pedido_domain = PedidoDomain(
+                cliente_id=usuario_id,
+                unidade_id=dados_pedido.unidade_id,
+                canal_pedido=dados_pedido.canal_pedido,
+                itens=itens_processados,
+                total=0
+            )
+
+            # Processa as regras de negócio e obtém os pontos gerados pelo pedido
+            pontos_gerados = pedido_domain.processar_regras_negocio()
+
+            # Atualiza pontos do usuário apenas quando o pedido for pago
+            if pedido_domain.status == PedidoStatusDomain.PAGO:
+                usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+                if usuario:
+                    usuario.pontos = (usuario.pontos or 0) + pontos_gerados
+                    db.add(usuario)
+
+                # Atualiza ou cria o registro de fidelidade do usuário
+                fidelidade = db.query(Fidelidade).filter(Fidelidade.usuario_id == usuario_id).first()
+                if fidelidade:
+                    fidelidade.pontos = (fidelidade.pontos or 0) + pontos_gerados
+                    fidelidade.data_atualizacao = datetime.utcnow()
+                else:
+                    fidelidade = Fidelidade(
+                        usuario_id=usuario_id,
+                        pontos=pontos_gerados,
+                    )
+
+                db.add(fidelidade)
+
+            # Converte a entidade de domínio para o modelo persistido no banco
+            pedido_model = PedidoModel(
+                usuario_id=usuario_id,
+                unidade_id=pedido_domain.unidade_id,
+                canal_pedido=PedidoCanalModel(pedido_domain.canal_pedido),
+                status=PedidoStatusModel(pedido_domain.status.value),
+                valor_total=pedido_domain.total,
+            )
+
+            db.add(pedido_model)
+            db.flush()
+
+            for item in itens_processados:
+                # Salva cada item pertencente ao pedido criado
+                pedido_item = PedidoItemModel(
+                    pedido_id=pedido_model.id,
+                    produto_id=item["produto_id"],
+                    quantidade=item["quantidade"],
+                    preco_unitario=item["preco_unitario"],
+                    subtotal=item["subtotal"],
+                )
+                db.add(pedido_item)
+
+                # Dá baixa no estoque somente para pedidos pagos
+                if pedido_domain.deve_baixar_estoque():
+                    estoques = estoques_map[item["produto_id"]]
+
+                    self.estoque_repo.atualizar_estoque(
+                        db,
+                        estoques,
+                        item["quantidade"]
+                    )
+
+            # Confirma a transação e devolve o pedido persistido
+            db.commit()
+            db.refresh(pedido_model)
+            pedido_model.pontos_gerados = pontos_gerados
+
+            return pedido_model
+
+        except DomainException:
+            # Desfaz a transação quando a regra de negócio lançar erro conhecido
+            db.rollback()
+            raise
+
+        except Exception:
+            # Converte erros inesperados em erro de domínio padronizado
+            db.rollback()
+            raise DomainException(
+                error="ERRO_INTERNO",
+                message="Erro interno do servidor.",
+                status_code=500
+            )
